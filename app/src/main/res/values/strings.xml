@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">RenderThat Task Assigner</string>
+    <string name="status_idle">IDLE</string>
+    <string name="status_cold">SEARCHING (60s)</string>
+    <string name="status_burst">⚡ BURSTING (5s)</string>
+    <string name="status_depleted">BATCH EMPTY</string>
+    <string name="status_done">🎯 GOAL REACHED</string>
+    <string name="status_dormant">DORMANT (Off Hours)</string>
+    <string name="btn_start">START AUTO-ASSIGN</string>
+    <string name="btn_pause">PAUSE</string>
+    <string name="mode_sim">🧪 SIMULATION</string>
+    <string name="mode_live">🌐 LIVE PORTAL</string>
+    <string name="desc_battery_opt">Check &amp; Request Battery Optimization Exemption</string>
+</resources>

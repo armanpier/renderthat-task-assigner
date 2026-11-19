@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RenderThat Creatives - Pipeline Tasks (Simulation)</title>
+    <link rel="stylesheet" href="simulation.css">
+</head>
+<body>
+    <!-- Simulation Test Control Panel -->
+    <div id="sim-control-panel">
+        <div class="sim-header">
+            <span class="sim-badge">🧪 SIMULATOR CONTROLS</span>
+            <span id="sim-status">Queue: 0 tasks available | Table: 0 tasks assigned</span>
+        </div>
+        <div class="sim-actions">
+            <button id="sim-drop-3" class="sim-btn">📦 Drop Batch (3 Tasks)</button>
+            <button id="sim-drop-5" class="sim-btn">📦 Drop Batch (5 Tasks)</button>
+            <button id="sim-toggle-btn" class="sim-btn">👁️ Toggle "Assign me a Task" Button</button>
+            <button id="sim-reset" class="sim-btn sim-btn-danger">🔄 Reset All</button>
+        </div>
+    </div>
+
+    <!-- RenderThat Portal Header -->
+    <header class="rt-header">
+        <div class="rt-logo-container">
+            <div class="rt-logo-box">
+                <span class="rt-logo-text-top">RenderThat</span>
+                <span class="rt-logo-text-bot">Creatives</span>
+            </div>
+        </div>
+        <nav class="rt-nav">
+            <a href="#" class="rt-nav-item">Home</a>
+            <a href="#" class="rt-nav-item">My Details</a>
+            <a href="#" class="rt-nav-item">Purchase Orders</a>
+            <a href="#" class="rt-nav-item active">Task Status</a>
+            <a href="#" class="rt-nav-item">Invoices</a>
+            <a href="#" class="rt-nav-item">Quotes</a>
+            <a href="#" class="rt-nav-item">Contracts</a>
+            <a href="#" class="rt-nav-item">Contact Support</a>
+            <a href="#" class="rt-nav-item">More ▾</a>
+        </nav>
+        <div class="rt-user-icons">
+            <span class="rt-icon">🔔</span>
+            <span class="rt-icon">👤</span>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="rt-main">
+        <!-- Filter Bar -->
+        <section class="rt-filters">
+            <div class="filter-item">
+                <label>Show:</label>
+                <select id="filter-show" class="rt-select">
+                    <option value="My" selected>My</option>
+                    <option value="All">All</option>
+                </select>
+            </div>
+            <div class="filter-item">
+                <label>SKU:</label>
+                <div class="rt-input-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" placeholder="Search after 3 characters" class="rt-input">
+                </div>
+            </div>
+            <div class="filter-item">
+                <label>Sample:</label>
+                <select id="filter-sample" class="rt-select">
+                    <option value="">Select an option...</option>
+                    <option value="Sample1">Sample 1</option>
+                </select>
+            </div>
+            <div class="filter-item">
+                <label>Account:</label>
+                <select id="filter-account" class="rt-select">
+                    <option value="Lidl Stiftung & Co. KG" selected>Lidl Stiftung & Co. KG</option>
+                    <option value="Other Account">Other Account</option>
+                </select>
+            </div>
+            <div class="filter-item">
+                <label>Quote:</label>
+                <select id="filter-quote" class="rt-select">
+                    <option value="Food" selected>Food</option>
+                    <option value="Non-Food">Non-Food</option>
+                </select>
+            </div>
+            <div class="filter-item">
+                <label>Team:</label>
+                <select id="filter-team" class="rt-select">
+                    <option value="Shading" selected>Shading</option>
+                    <option value="Auto Process">Auto Process</option>
+                    <option value="Modeling">Modeling</option>
+                </select>
+            </div>
+        </section>
+
+        <!-- Action Row -->
+        <div class="rt-action-row">
+            <button id="btn-assign-task" class="rt-btn-primary">Assign me a Task</button>
+        </div>
+
+        <!-- Pagination & Records Indicator -->
+        <section class="rt-pagination-row">
+            <div class="records-per-page">
+                <span>Number of records on page:</span>
+                <select class="rt-select-small">
+                    <option>20</option>
+                    <option>50</option>
+                </select>
+            </div>
+            <div class="page-controls">
+                <button class="page-btn" disabled>◂ First</button>
+                <button class="page-btn" disabled>‹ Previous</button>
+                <span class="page-indicator">Page 1 of 1</span>
+                <span id="records-counter-text" class="records-count">Number of records: 0</span>
+                <button class="page-btn" disabled>Next ›</button>
+                <button class="page-btn" disabled>Last ▸</button>
+            </div>
+        </section>
+
+        <!-- Tasks Data Table -->
+        <section class="rt-table-container">
+            <table class="rt-table">
+                <thead>
+                    <tr>
+                        <th style="width: 150px;">SELECT TO UPDATE</th>
+                        <th style="width: 350px;">CLIENT PRODUCT</th>
+                        <th style="width: 200px;">CREATED DATE</th>
+                    </tr>
+                </thead>
+                <tbody id="rt-table-body">
+                    <!-- Dynamic task rows injected here -->
+                </tbody>
+            </table>
+            <div id="no-records-msg" class="empty-table-msg">
+                No tasks currently assigned to you.
+            </div>
+        </section>
+    </main>
+
+    <!-- Simulated Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="simulation.js"></script>
+</body>
+</html>

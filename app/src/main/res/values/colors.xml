@@ -1,0 +1,27 @@
+<resources>
+    <color name="primary">#1E222B</color>
+    <color name="primary_variant">#14171E</color>
+    <color name="secondary">#00C853</color>
+    <color name="secondary_variant">#009624</color>
+    <color name="background">#12141A</color>
+    <color name="surface">#1C2029</color>
+    <color name="surface_card">#222733</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="on_secondary">#FFFFFF</color>
+    <color name="on_background">#E6E6E6</color>
+    <color name="on_surface">#E6E6E6</color>
+    <color name="accent_blue">#2196F3</color>
+    <color name="accent_orange">#FF9800</color>
+    <color name="accent_green">#4CAF50</color>
+    <color name="accent_red">#F44336</color>
+    <color name="card_border">#2C3240</color>
+    <color name="text_secondary">#9E9E9E</color>
+
+    <!-- State badge colors -->
+    <color name="badge_idle">#374151</color>
+    <color name="badge_cold">#1E88E5</color>
+    <color name="badge_burst">#FB8C00</color>
+    <color name="badge_done">#00C853</color>
+    <color name="badge_dormant">#7C4DFF</color>
+    <color name="badge_error">#E53935</color>
+</resources>
