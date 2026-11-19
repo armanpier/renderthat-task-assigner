@@ -13,6 +13,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.View
+import android.widget.ScrollView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -32,10 +34,10 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        AppPreferences.applyToTaskManager(this)
         NotificationHelper.createChannels(this)
         requestNotificationPermission()
 
+        AppPreferences.applyToTaskManager(this)
         setupViews()
     }
 
@@ -47,18 +49,31 @@ class MainActivity : AppCompatActivity() {
         TaskMonitorService.onStateChangeListener = {
             runOnUiThread { updateUI() }
         }
+
+        LiveLogger.onLogListener = {
+            runOnUiThread {
+                binding.tvLiveLogText.text = LiveLogger.getAllLogs()
+                binding.scrollLogConsole.post {
+                    binding.scrollLogConsole.fullScroll(ScrollView.FOCUS_DOWN)
+                }
+            }
+        }
+
+        binding.tvLiveLogText.text = LiveLogger.getAllLogs()
         updateUI()
+        updateBatteryOptButton()
     }
 
     override fun onStop() {
-        // Detach WebView so Activity doesn't leak, but preserve offscreen desktop rendering
+        // Detach WebView to prevent leak, keeping offscreen layout alive
         WebViewHolder.detachFromContainer()
         TaskMonitorService.onStateChangeListener = null
+        LiveLogger.onLogListener = null
         super.onStop()
     }
 
     private fun setupViews() {
-        // Start / Pause Button
+        // 1. Start / Pause Button
         binding.btnStartPause.setOnClickListener {
             if (TaskManager.isRunning) {
                 TaskMonitorService.stopService(this)
@@ -68,12 +83,34 @@ class MainActivity : AppCompatActivity() {
             updateUI()
         }
 
-        // Mode Toggle Button (Simulation <-> Live)
+        // 2. Direct Manual Click Now Button
+        binding.btnManualClick.setOnClickListener {
+            TaskMonitorService.triggerManualClick(this)
+            Toast.makeText(this, "⚡ Sent Click command to 'Assign me a Task'!", Toast.LENGTH_SHORT).show()
+        }
+
+        // 3. Override Working Hours (24/7 Test Mode) Button
+        binding.btnOverrideHours.setOnClickListener {
+            val current = AppPreferences.isOverrideHours(this)
+            val newOverride = !current
+            AppPreferences.setOverrideHours(this, newOverride)
+            val stateMsg = if (newOverride) "24/7 Test Mode ON (Hours overridden)" else "Normal Hours (10:00 - 19:00)"
+            Toast.makeText(this, "⏰ $stateMsg", Toast.LENGTH_SHORT).show()
+            LiveLogger.log("Config", "Working hours override changed: $newOverride")
+            updateUI()
+        }
+
+        // 4. Reload Web Page Button
+        binding.btnReloadWeb.setOnClickListener {
+            WebViewHolder.reloadCurrentMode()
+            Toast.makeText(this, "🔄 Reloading page...", Toast.LENGTH_SHORT).show()
+        }
+
+        // 5. Mode Toggle Button (Simulation <-> Live)
         binding.btnToggleMode.setOnClickListener {
             val isSim = WebViewHolder.isSimulationMode
             val newMode = !isSim
             AppPreferences.setSimulationMode(this, newMode)
-            binding.btnToggleMode.text = if (newMode) getString(R.string.mode_sim) else getString(R.string.mode_live)
             Toast.makeText(
                 this,
                 "Switched to: ${if (newMode) "Simulation Mode" else "Live Portal"}",
@@ -82,10 +119,27 @@ class MainActivity : AppCompatActivity() {
             updateUI()
         }
 
-        // Battery Optimization Check Button
+        // 6. Battery Optimization Check Button
         binding.btnBatteryOpt.setOnClickListener {
             checkAndPromptBatteryOptimization()
         }
+
+        // 7. Live Activity Log Controls (Clear & Collapse/Expand)
+        binding.btnClearLog.setOnClickListener {
+            LiveLogger.clear()
+        }
+
+        val toggleLogAction = View.OnClickListener {
+            if (binding.scrollLogConsole.visibility == View.VISIBLE) {
+                binding.scrollLogConsole.visibility = View.GONE
+                binding.btnToggleLog.text = "Show ▴"
+            } else {
+                binding.scrollLogConsole.visibility = View.VISIBLE
+                binding.btnToggleLog.text = "Hide ▾"
+            }
+        }
+        binding.btnToggleLog.setOnClickListener(toggleLogAction)
+        binding.tvLogHeader.setOnClickListener(toggleLogAction)
     }
 
     private fun updateUI() {
@@ -103,7 +157,7 @@ class MainActivity : AppCompatActivity() {
         }
         val drawable = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            cornerRadius = 24f
+            cornerRadius = 20f
             setColor(badgeColor)
         }
         binding.tvStatusBadge.background = drawable
@@ -123,15 +177,30 @@ class MainActivity : AppCompatActivity() {
             binding.btnStartPause.setTextColor(Color.BLACK)
         }
 
+        // 24/7 Override button state
+        val isOverride = AppPreferences.isOverrideHours(this)
+        if (isOverride) {
+            binding.btnOverrideHours.text = "⏰ 24/7: ON"
+            binding.btnOverrideHours.setTextColor(Color.parseColor("#00E676"))
+            binding.btnOverrideHours.strokeColor = ColorStateList.valueOf(Color.parseColor("#00E676"))
+        } else {
+            binding.btnOverrideHours.text = "⏰ 24/7: OFF"
+            binding.btnOverrideHours.setTextColor(Color.parseColor("#FFB300"))
+            binding.btnOverrideHours.strokeColor = ColorStateList.valueOf(Color.parseColor("#FFB300"))
+        }
+
         // Mode button text
         binding.btnToggleMode.text = if (WebViewHolder.isSimulationMode) getString(R.string.mode_sim) else getString(R.string.mode_live)
+    }
 
-        // Battery button state tint
+    private fun updateBatteryOptButton() {
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        val isBatteryIgnored = powerManager.isIgnoringBatteryOptimizations(packageName)
-        binding.btnBatteryOpt.setColorFilter(
-            Color.parseColor(if (isBatteryIgnored) "#00C853" else "#FF9800")
-        )
+        val isWhitelisted = powerManager.isIgnoringBatteryOptimizations(packageName)
+        if (isWhitelisted) {
+            binding.btnBatteryOpt.setColorFilter(Color.parseColor("#00C853"))
+        } else {
+            binding.btnBatteryOpt.setColorFilter(Color.parseColor("#FF9800"))
+        }
     }
 
     private fun requestNotificationPermission() {
@@ -149,8 +218,8 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("BatteryLife")
     private fun checkAndPromptBatteryOptimization() {
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        val packageName = packageName
-        if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+        val isWhitelisted = powerManager.isIgnoringBatteryOptimizations(packageName)
+        if (!isWhitelisted) {
             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                 data = Uri.parse("package:$packageName")
             }
@@ -161,7 +230,7 @@ class MainActivity : AppCompatActivity() {
                 startActivity(fallbackIntent)
             }
         } else {
-            Toast.makeText(this, "✓ Battery optimization is already disabled for this app!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "✓ Battery optimization is already unrestricted!", Toast.LENGTH_SHORT).show()
         }
     }
 }

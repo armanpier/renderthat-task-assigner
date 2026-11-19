@@ -2,10 +2,16 @@ package com.renderthat.taskassigner
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -23,6 +29,8 @@ object WebViewHolder {
     private var webView: WebView? = null
     var isSimulationMode: Boolean = true
         private set
+
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
     var onPageFinishedListener: (() -> Unit)? = null
 
@@ -43,6 +51,11 @@ object WebViewHolder {
                     databaseEnabled = true
                     useWideViewPort = true
                     loadWithOverviewMode = true
+                    builtInZoomControls = true
+                    displayZoomControls = false
+                    setSupportZoom(true)
+                    allowFileAccess = true
+                    allowContentAccess = true
                     userAgentString = DESKTOP_USER_AGENT
                     cacheMode = WebSettings.LOAD_DEFAULT
                     mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
@@ -52,12 +65,36 @@ object WebViewHolder {
                 cookieManager.setAcceptCookie(true)
                 cookieManager.setAcceptThirdPartyCookies(this, true)
 
-                webChromeClient = WebChromeClient()
+                webChromeClient = object : WebChromeClient() {
+                    override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                        consoleMessage?.let {
+                            if (it.messageLevel() == ConsoleMessage.MessageLevel.ERROR ||
+                                it.messageLevel() == ConsoleMessage.MessageLevel.WARNING) {
+                                LiveLogger.log("WebConsole", it.message())
+                            }
+                        }
+                        return super.onConsoleMessage(consoleMessage)
+                    }
+                }
+
                 webViewClient = object : WebViewClient() {
+                    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                        super.onPageStarted(view, url, favicon)
+                        LiveLogger.log("WebView", "Page started: $url")
+                    }
+
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
                         CookieManager.getInstance().flush()
+                        LiveLogger.log("WebView", "Page loaded: $url")
                         onPageFinishedListener?.invoke()
+                    }
+
+                    override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                        super.onReceivedError(view, request, error)
+                        if (request?.isForMainFrame == true) {
+                            LiveLogger.log("WebView", "Page load error: ${error?.description}")
+                        }
                     }
                 }
 
@@ -77,26 +114,37 @@ object WebViewHolder {
     fun setSimulationMode(simulation: Boolean) {
         if (isSimulationMode != simulation) {
             isSimulationMode = simulation
+            LiveLogger.log("WebView", "Switching mode to: ${if (simulation) "SIMULATION" else "LIVE PORTAL"}")
             loadCurrentMode()
         }
     }
 
     fun loadCurrentMode() {
         val targetUrl = if (isSimulationMode) SIMULATION_URL else LIVE_URL
+        LiveLogger.log("WebView", "Loading URL: $targetUrl")
         webView?.loadUrl(targetUrl)
+    }
+
+    fun reloadCurrentMode() {
+        LiveLogger.log("WebView", "Reloading page...")
+        webView?.reload()
     }
 
     fun attachToContainer(container: ViewGroup) {
         val wv = webView ?: return
         if (wv.parent === container) return
         (wv.parent as? ViewGroup)?.removeView(wv)
+        wv.layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
         container.addView(wv)
+        wv.requestLayout()
     }
 
     fun detachFromContainer() {
         val wv = webView ?: return
         (wv.parent as? ViewGroup)?.removeView(wv)
-        // Maintain layout dimensions while detached so shadow DOM and desktop viewport remain active
         wv.measure(
             View.MeasureSpec.makeMeasureSpec(1440, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(2560, View.MeasureSpec.EXACTLY)
@@ -106,10 +154,26 @@ object WebViewHolder {
     }
 
     fun evaluateJavascript(script: String, callback: ((String) -> Unit)? = null) {
-        webView?.post {
-            webView?.evaluateJavascript(script) { result ->
-                callback?.invoke(result)
+        val wv = webView
+        if (wv == null) {
+            LiveLogger.log("WebView", "⚠️ evaluateJavascript called but WebView is null")
+            callback?.invoke("null")
+            return
+        }
+        val action = Runnable {
+            try {
+                wv.evaluateJavascript(script) { result ->
+                    callback?.invoke(result ?: "null")
+                }
+            } catch (e: Throwable) {
+                LiveLogger.log("WebView", "⚠️ evaluateJavascript error: ${e.message}")
+                callback?.invoke("null")
             }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            action.run()
+        } else {
+            mainHandler.post(action)
         }
     }
 }

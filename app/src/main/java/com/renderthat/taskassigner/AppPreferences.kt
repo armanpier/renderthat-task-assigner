@@ -21,6 +21,7 @@ object AppPreferences {
     private const val KEY_WORK_HOUR_END = "pref_work_hour_end"
     private const val KEY_WORK_DAYS = "pref_work_days"
     private const val KEY_SIMULATION_MODE = "pref_simulation_mode"
+    private const val KEY_OVERRIDE_HOURS = "pref_override_hours"
     private const val KEY_SOUND_ENABLED = "pref_sound_enabled"
     private const val KEY_VIBRATION_ENABLED = "pref_vibration_enabled"
 
@@ -114,6 +115,19 @@ object AppPreferences {
     }
 
     /**
+     * Override working hours toggle: When enabled, runs 24/7 ignoring the 10-19 schedule.
+     */
+    fun isOverrideHours(context: Context): Boolean {
+        return getPrefs(context).getBoolean(KEY_OVERRIDE_HOURS, false)
+    }
+
+    fun setOverrideHours(context: Context, override: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_OVERRIDE_HOURS, override).apply()
+        TaskManager.overrideWorkingHours = override
+        TaskManager.updateStateBasedOnSchedule()
+    }
+
+    /**
      * Sound alerts toggle. Default: true.
      */
     fun isSoundEnabled(context: Context): Boolean {
@@ -143,6 +157,7 @@ object AppPreferences {
         TaskManager.workHourStart = getWorkHourStart(context)
         TaskManager.workHourEnd = getWorkHourEnd(context)
         TaskManager.workDays = getWorkDays(context)
+        TaskManager.overrideWorkingHours = isOverrideHours(context)
         val simMode = isSimulationMode(context)
         WebViewHolder.setSimulationMode(simMode)
     }

@@ -42,6 +42,8 @@ object TaskManager {
     var isRunning: Boolean = false
         private set
 
+    var overrideWorkingHours: Boolean = false
+
     private var lastActiveDayOfYear: Int = Calendar.getInstance().get(Calendar.DAY_OF_YEAR)
 
     // Working schedule defaults: Monday-Friday, 10:00 to 19:00
@@ -85,6 +87,9 @@ object TaskManager {
     }
 
     fun isWithinSchedule(): Boolean {
+        if (overrideWorkingHours) {
+            return true
+        }
         val now = Calendar.getInstance()
         val dayOfWeek = now.get(Calendar.DAY_OF_WEEK)
         if (!workDays.contains(dayOfWeek)) {
@@ -101,10 +106,12 @@ object TaskManager {
         }
         if (!isWithinSchedule()) {
             currentState = MonitorState.DORMANT_OFF_HOURS
+            LiveLogger.log("TaskManager", "State -> DORMANT (Outside working hours 10-19. Enable '24/7 Override' to test now)")
             return
         }
         if (currentTasksCount >= maxDailyQuota) {
             currentState = MonitorState.DAILY_MAX_REACHED
+            LiveLogger.log("TaskManager", "State -> DAILY_MAX_REACHED ($currentTasksCount/$maxDailyQuota tasks)")
             return
         }
         if (currentState == MonitorState.BATCH_DEPLETED_STOPPED) {
@@ -114,10 +121,14 @@ object TaskManager {
             return
         }
 
+        val previous = currentState
         currentState = if (currentTasksCount > 0) {
             MonitorState.BURST_MODE
         } else {
             MonitorState.COLD_SEARCH
+        }
+        if (previous != currentState) {
+            LiveLogger.log("TaskManager", "State transition: $previous -> $currentState")
         }
     }
 

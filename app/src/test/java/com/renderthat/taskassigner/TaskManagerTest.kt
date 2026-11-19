@@ -128,5 +128,11 @@ class TaskManagerTest {
 
         TaskManager.start()
         assertEquals(MonitorState.DORMANT_OFF_HOURS, TaskManager.currentState)
+
+        // When override is active, ignores off-hours
+        TaskManager.overrideWorkingHours = true
+        assertTrue(TaskManager.isWithinSchedule())
+        TaskManager.updateStateBasedOnSchedule()
+        assertEquals(MonitorState.COLD_SEARCH, TaskManager.currentState)
     }
 }

@@ -18,9 +18,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="12dp">
+            android:padding="10dp">
 
-            <!-- Title & Top Action Controls Row -->
+            <!-- Title & Quick Actions Row -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -34,49 +34,52 @@
                     android:layout_weight="1"
                     android:text="@string/app_name"
                     android:textColor="@color/on_primary"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.02" />
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
 
-                <!-- Mode Toggle Button (Simulation <-> Live) -->
+                <!-- Reload Button -->
+                <ImageButton
+                    android:id="@+id/btn_reload_web"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/ic_menu_rotate"
+                    app:tint="#A0AEC0"
+                    android:contentDescription="Reload Page" />
+
+                <!-- Mode Toggle Button -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_toggle_mode"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="wrap_content"
-                    android:layout_height="38dp"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="6dp"
                     android:text="@string/mode_sim"
                     android:textColor="@color/accent_blue"
                     app:strokeColor="@color/accent_blue"
-                    app:strokeWidth="1dp"
                     android:textSize="11sp"
-                    android:textStyle="bold"
-                    app:cornerRadius="6dp"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="10dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp" />
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp" />
 
-                <!-- Battery Optimization Exemption Button -->
+                <!-- Battery Optimization Button -->
                 <ImageButton
                     android:id="@+id/btn_battery_opt"
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:layout_marginStart="6dp"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="4dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
                     android:src="@drawable/ic_battery_bolt"
                     app:tint="@color/accent_orange"
-                    android:padding="6dp"
-                    android:scaleType="fitCenter"
-                    android:contentDescription="@string/desc_battery_opt" />
+                    android:contentDescription="Battery Optimization" />
 
             </LinearLayout>
 
-            <!-- Status Badges & Counters Row -->
+            <!-- Status Badges Row -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="8dp"
                 android:gravity="center_vertical">
 
                 <!-- Status Pill -->
@@ -85,65 +88,158 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:background="@drawable/badge_status_bg"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp"
-                    android:paddingTop="5dp"
-                    android:paddingBottom="5dp"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:paddingTop="3dp"
+                    android:paddingBottom="3dp"
                     android:text="@string/status_idle"
                     android:textColor="#FFFFFF"
-                    android:textSize="12sp"
-                    android:textStyle="bold"
-                    android:maxLines="1"
-                    android:ellipsize="end" />
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
 
                 <View
                     android:layout_width="0dp"
                     android:layout_height="1dp"
                     android:layout_weight="1" />
 
-                <!-- Tasks Count Badge -->
+                <!-- Tasks Count -->
                 <TextView
                     android:id="@+id/tv_tasks_count"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Tasks: 0 / 5"
                     android:textColor="@color/secondary"
-                    android:textSize="14sp"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
 
-                <!-- Clicks Count Badge -->
                 <TextView
                     android:id="@+id/tv_clicks_count"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="14dp"
+                    android:layout_marginStart="10dp"
                     android:text="Clicks: 0"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    android:textColor="#9E9E9E"
+                    android:textSize="11sp" />
 
             </LinearLayout>
 
-            <!-- Big Start / Pause Action Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_start_pause"
+            <!-- Action Controls Row (Start, Click Now, 24/7 Override) -->
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="50dp"
-                android:layout_marginTop="10dp"
-                android:text="@string/btn_start"
-                app:backgroundTint="@color/secondary"
-                android:textColor="#000000"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                app:cornerRadius="8dp"
-                android:insetTop="0dp"
-                android:insetBottom="0dp"
-                app:elevation="2dp" />
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical">
+
+                <!-- Start / Pause Action Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_start_pause"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1.3"
+                    android:text="@string/btn_start"
+                    android:backgroundTint="@color/secondary"
+                    android:textColor="#000000"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="6dp" />
+
+                <!-- Direct Click Now Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_manual_click"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:text="⚡ Click Now"
+                    android:textColor="#00E5FF"
+                    app:strokeColor="#00E5FF"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="6dp" />
+
+                <!-- Override Working Hours Toggle Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_override_hours"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1.1"
+                    android:layout_marginStart="6dp"
+                    android:text="⏰ 24/7: OFF"
+                    android:textColor="#FFB300"
+                    app:strokeColor="#FFB300"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="6dp" />
+
+            </LinearLayout>
+
+            <!-- Live Activity Log Section Header -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="6dp"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/tv_log_header"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="📄 Live Activity Log (Tap to toggle)"
+                    android:textColor="#8B949E"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_clear_log"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="4dp"
+                    android:text="Clear"
+                    android:textColor="#58A6FF"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/btn_toggle_log"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:padding="4dp"
+                    android:text="Hide ▾"
+                    android:textColor="#8B949E"
+                    android:textSize="11sp" />
+
+            </LinearLayout>
+
+            <!-- Collapsible Live Log Console Window -->
+            <ScrollView
+                android:id="@+id/scroll_log_console"
+                android:layout_width="match_parent"
+                android:layout_height="120dp"
+                android:layout_marginTop="4dp"
+                android:background="#0D1117"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/tv_live_log_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="#39D353"
+                    android:fontFamily="monospace"
+                    android:textSize="10sp"
+                    android:text="[Ready] RenderThat Task Assigner initialized.\nTap 'START AUTO-ASSIGN' or '⚡ Click Now'." />
+
+            </ScrollView>
 
         </LinearLayout>
 
     </androidx.cardview.widget.CardView>
 
-    <!-- Persistent WebView Container -->
+    <!-- WebView Container -->
     <FrameLayout
         android:id="@+id/webview_container"
         android:layout_width="match_parent"

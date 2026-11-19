@@ -66,6 +66,14 @@ object DomEvaluator {
         }
 
         function findAssignButton() {
+            var direct = document.getElementById('btn-assign-task');
+            if (direct && !direct.disabled) {
+                var dStyle = window.getComputedStyle(direct);
+                if (dStyle.display !== 'none' && dStyle.visibility !== 'hidden') {
+                    return direct;
+                }
+            }
+
             var clickables = queryAllDeep('button, [role="button"], a.btn, input[type="button"], input[type="submit"]');
             for (var i = 0; i < clickables.length; i++) {
                 var el = clickables[i];
@@ -78,10 +86,7 @@ object DomEvaluator {
                     if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
                         continue;
                     }
-                    var rect = el.getBoundingClientRect();
-                    if ((rect.width > 0 && rect.height > 0) || el.offsetParent !== null) {
-                        return el;
-                    }
+                    return el;
                 }
             }
             return null;
