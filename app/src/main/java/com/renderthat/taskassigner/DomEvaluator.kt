@@ -74,17 +74,22 @@ object DomEvaluator {
                 }
             }
 
-            var clickables = queryAllDeep('button, [role="button"], a.btn, input[type="button"], input[type="submit"]');
+            var clickables = queryAllDeep('button, [role="button"], a, input[type="button"], input[type="submit"], lightning-button');
             for (var i = 0; i < clickables.length; i++) {
                 var el = clickables[i];
-                var text = (el.textContent || el.value || el.innerText || '').trim().toLowerCase();
-                if (text === 'assign me a task') {
-                    if (el.disabled || el.getAttribute('aria-disabled') === 'true') {
+                var rawText = (el.textContent || el.value || el.innerText || '');
+                var normText = rawText.replace(/\s+/g, ' ').trim().toLowerCase();
+                if (normText === 'assign me a task' || normText.indexOf('assign me a task') !== -1) {
+                    if (el.disabled || el.getAttribute('aria-disabled') === 'true' || (el.classList && el.classList.contains('disabled'))) {
                         continue;
                     }
                     var style = window.getComputedStyle(el);
                     if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
                         continue;
+                    }
+                    if (el.tagName && el.tagName.toLowerCase() === 'lightning-button') {
+                        var innerBtn = (el.shadowRoot && el.shadowRoot.querySelector('button')) || el.querySelector('button');
+                        if (innerBtn) return innerBtn;
                     }
                     return el;
                 }
@@ -177,10 +182,25 @@ object DomEvaluator {
                             }
                         }
                         
-                        // Check enclosing lightning-select or container
+                        // Check enclosing lightning-select, shadow root host, or container
                         for (var j = 0; j < selects.length; j++) {
                             var sel2 = selects[j];
-                            var lgt = sel2.closest ? (sel2.closest('lightning-select') || sel2.closest('lightning-combobox') || sel2.closest('.filter-item')) : null;
+                            var root = sel2.getRootNode ? sel2.getRootNode() : null;
+                            if (root && root.host) {
+                                var hostLabel = (root.host.getAttribute('label') || '').toLowerCase();
+                                var hostName = (root.host.getAttribute('name') || '').toLowerCase();
+                                var hostTitle = (root.host.getAttribute('title') || '').toLowerCase();
+                                if (hostLabel.indexOf(key) !== -1 || hostName.indexOf(key) !== -1 || hostTitle.indexOf(key) !== -1) {
+                                    return sel2;
+                                }
+                            }
+                            if (root && root.querySelector) {
+                                var rootLbl = root.querySelector('label');
+                                if (rootLbl && (rootLbl.textContent || '').toLowerCase().indexOf(key) !== -1) {
+                                    return sel2;
+                                }
+                            }
+                            var lgt = sel2.closest ? (sel2.closest('lightning-select') || sel2.closest('lightning-combobox') || sel2.closest('.filter-item') || sel2.closest('.slds-form-element')) : null;
                             if (lgt) {
                                 var labelAttr = (lgt.getAttribute('label') || '').toLowerCase();
                                 var nameAttr = (lgt.getAttribute('name') || '').toLowerCase();
@@ -198,11 +218,13 @@ object DomEvaluator {
                                     return sel2;
                                 }
                             }
-                            if (sel2.parentElement) {
-                                var lbl2 = sel2.parentElement.querySelector('label');
-                                if (lbl2 && (lbl2.textContent || '').toLowerCase().indexOf(key) !== -1) {
+                            var parent = sel2.parentElement;
+                            for (var p = 0; p < 4 && parent; p++) {
+                                var parentTxt = (parent.textContent || '').toLowerCase();
+                                if (parentTxt.indexOf(key) !== -1) {
                                     return sel2;
                                 }
+                                parent = parent.parentElement;
                             }
                         }
                         return null;
@@ -243,7 +265,7 @@ object DomEvaluator {
                 // 4. Exact Task Count Parser: 'Number of records: X'
                 function extractTaskCount() {
                     var bodyText = document.body ? (document.body.innerText || '') : '';
-                    var match = bodyText.match(/Number of records:\s*(\d+)/i);
+                    var match = bodyText.match(/(?:^|[^\w])Number of records\s*:\s*(\d+)/i);
                     if (match) {
                         return parseInt(match[1], 10);
                     }
@@ -251,7 +273,7 @@ object DomEvaluator {
                     for (var m = 0; m < allEls.length; m++) {
                         var text = allEls[m].textContent || '';
                         if (text.indexOf('Number of records') !== -1) {
-                            var subMatch = text.match(/Number of records:\s*(\d+)/i);
+                            var subMatch = text.match(/(?:^|[^\w])Number of records\s*:\s*(\d+)/i);
                             if (subMatch) {
                                 return parseInt(subMatch[1], 10);
                             }

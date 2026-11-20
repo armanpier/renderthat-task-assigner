@@ -335,7 +335,7 @@ class TaskMonitorService : Service() {
         if (newlyClaimed) {
             LiveLogger.log("Tasks", "🎉 New tasks detected in table! Total: ${result.taskCount}")
             if (TaskManager.currentTasksCount >= TaskManager.maxDailyQuota) {
-                NotificationHelper.sendAlarmAlert(
+                NotificationHelper.sendTaskAssignedDing(
                     this,
                     "🎯 Daily Quota Reached!",
                     "You have 5 tasks! Monitoring stopped for the day."
@@ -344,7 +344,7 @@ class TaskMonitorService : Service() {
                 scheduleNextTick(60_000L)
                 return
             } else {
-                NotificationHelper.sendAlarmAlert(
+                NotificationHelper.sendTaskAssignedDing(
                     this,
                     "🎉 Task Assigned!",
                     "You now have ${TaskManager.currentTasksCount} tasks assigned!"
@@ -412,7 +412,7 @@ class TaskMonitorService : Service() {
                     when (outcome) {
                         ClickOutcome.TASK_CLAIMED -> {
                             LiveLogger.log("Tasks", "🎉 SUCCESS: Claimed task #${postResult.taskCount}! Bursting...")
-                            NotificationHelper.sendAlarmAlert(
+                            NotificationHelper.sendTaskAssignedDing(
                                 this,
                                 "🎉 Task Assigned!",
                                 "You now have ${TaskManager.currentTasksCount} tasks assigned!"
@@ -420,7 +420,7 @@ class TaskMonitorService : Service() {
                         }
                         ClickOutcome.TASK_CLAIMED_QUOTA_REACHED -> {
                             LiveLogger.log("Tasks", "🎯 Daily quota of 5 reached! Stopping for today.")
-                            NotificationHelper.sendAlarmAlert(
+                            NotificationHelper.sendTaskAssignedDing(
                                 this,
                                 "🎯 Daily Quota Reached!",
                                 "You have 5 tasks! Monitoring stopped for today."
@@ -464,7 +464,7 @@ class TaskMonitorService : Service() {
                     val outcome = TaskManager.onButtonClickExecuted(countBefore, postResult.taskCount)
                     LiveLogger.log("ManualAction", "Direct click result: before=$countBefore, after=${postResult.taskCount}, outcome=$outcome")
                     if (postResult.taskCount > countBefore) {
-                        NotificationHelper.sendAlarmAlert(
+                        NotificationHelper.sendTaskAssignedDing(
                             this,
                             "🎉 Task Assigned!",
                             "Manual click secured task #${postResult.taskCount}!"

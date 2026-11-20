@@ -33,12 +33,22 @@ object SettingsDialog {
         binding.etPassword.setText(AppPreferences.getSavedPassword(context))
         binding.swAutoLogin.isChecked = AppPreferences.isAutoLoginEnabled(context)
 
-        // 2. Cancel Button
+        // 2. Test Ding & Pop-Up Notification Button
+        binding.btnTestDing.setOnClickListener {
+            NotificationHelper.sendTaskAssignedDing(
+                context,
+                "🎉 Task Assigned! (Test)",
+                "You now have 1 task assigned! (This is your ding and pop-up)"
+            )
+            Toast.makeText(context, "🔔 Sent test ding notification!", Toast.LENGTH_SHORT).show()
+        }
+
+        // 3. Cancel Button
         binding.btnCancelSettings.setOnClickListener {
             dialog.dismiss()
         }
 
-        // 3. Save Button
+        // 4. Save Button
         binding.btnSaveSettings.setOnClickListener {
             val coldSec = binding.etColdInterval.text.toString().toIntOrNull() ?: AppPreferences.DEFAULT_COLD_INTERVAL_SEC
             val burstSec = binding.etBurstInterval.text.toString().toIntOrNull() ?: AppPreferences.DEFAULT_BURST_INTERVAL_SEC

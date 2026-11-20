@@ -18,8 +18,11 @@ object NotificationHelper {
 
     const val CHANNEL_STATUS_ID = "renderthat_status_channel"
     const val CHANNEL_ALARM_ID = "renderthat_alarm_channel"
+    const val CHANNEL_TASK_DING_ID = "renderthat_task_ding_channel"
+
     const val NOTIFICATION_STATUS_ID = 1001
     const val NOTIFICATION_ALARM_ID = 1002
+    const val NOTIFICATION_TASK_DING_ID = 1003
 
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -35,29 +38,50 @@ object NotificationHelper {
                 setShowBadge(false)
             }
 
-            // Alarm channel for task claimed / goal reached notifications (High importance, USAGE_ALARM)
+            // Alarm channel for critical events like session expiration (High importance, USAGE_ALARM)
             val alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                 ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
-            val audioAttributes = AudioAttributes.Builder()
+            val audioAttributesAlarm = AudioAttributes.Builder()
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .setUsage(AudioAttributes.USAGE_ALARM)
                 .build()
 
             val alarmChannel = NotificationChannel(
                 CHANNEL_ALARM_ID,
-                "Task Assignment Alerts",
+                "Critical Session Alerts",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "High-priority sound and vibration alerts when tasks are assigned or batch goal is met"
-                setSound(alarmSound, audioAttributes)
+                description = "High-priority sound and vibration alerts when session expires"
+                setSound(alarmSound, audioAttributesAlarm)
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 400, 200, 400, 200, 600)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
 
+            // Dedicated Task Assignment Alert Channel (High importance for Heads-Up Pop-Up, default Ding sound)
+            val dingSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val audioAttributesDing = AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                .build()
+
+            val dingChannel = NotificationChannel(
+                CHANNEL_TASK_DING_ID,
+                "Task Assignment Notifications",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Short ding sound and pop-up banner when tasks are assigned"
+                setSound(dingSound, audioAttributesDing)
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 150)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setShowBadge(true)
+            }
+
             notificationManager.createNotificationChannel(statusChannel)
             notificationManager.createNotificationChannel(alarmChannel)
+            notificationManager.createNotificationChannel(dingChannel)
         }
     }
 
@@ -158,6 +182,73 @@ object NotificationHelper {
                     .build()
                 ringtone.audioAttributes = audioAttributes
                 ringtone.play()
+            } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * Sends a short, crisp notification (just a system "ding" sound and a top Heads-Up pop-up banner)
+     * when tasks are assigned to the user.
+     */
+    fun sendTaskAssignedDing(context: Context, title: String, message: String) {
+        val soundEnabled = AppPreferences.isSoundEnabled(context)
+        val vibrationEnabled = AppPreferences.isVibrationEnabled(context)
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            System.currentTimeMillis().toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val dingSound = if (soundEnabled) {
+            RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        } else {
+            null
+        }
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_TASK_DING_ID)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_EVENT)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+
+        if (soundEnabled && dingSound != null) {
+            builder.setSound(dingSound)
+        } else {
+            builder.setSilent(true)
+        }
+
+        if (vibrationEnabled) {
+            builder.setVibrate(longArrayOf(0, 150))
+        } else {
+            builder.setVibrate(longArrayOf(0))
+        }
+
+        val notification = builder.build()
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(NOTIFICATION_TASK_DING_ID, notification)
+
+        // Subtle single haptic buzz (150ms)
+        if (vibrationEnabled) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                    vibratorManager?.defaultVibrator?.vibrate(
+                        VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE)
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                    vibrator?.vibrate(VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE))
+                }
             } catch (_: Exception) {}
         }
     }
