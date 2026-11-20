@@ -49,6 +49,7 @@ object WebViewHolder {
                     javaScriptEnabled = true
                     domStorageEnabled = true
                     databaseEnabled = true
+                    saveFormData = true
                     useWideViewPort = true
                     loadWithOverviewMode = true
                     builtInZoomControls = true

@@ -124,7 +124,14 @@ class MainActivity : AppCompatActivity() {
             checkAndPromptBatteryOptimization()
         }
 
-        // 7. Live Activity Log Controls (Clear & Collapse/Expand)
+        // 7. Settings Dialog Button
+        binding.btnSettings.setOnClickListener {
+            SettingsDialog.show(this) {
+                updateUI()
+            }
+        }
+
+        // 8. Live Activity Log Controls (Clear & Collapse/Expand)
         binding.btnClearLog.setOnClickListener {
             LiveLogger.clear()
         }

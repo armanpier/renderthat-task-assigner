@@ -17,6 +17,14 @@ class TaskManagerTest {
         TaskManager.workHourStart = 0
         TaskManager.workHourEnd = 24
         TaskManager.workDays = (1..7).toSet()
+        TaskManager.coldIntervalSec = 60
+        TaskManager.burstIntervalSec = 5
+        TaskManager.jitterPercent = 25
+        TaskManager.keepAliveIntervalMinutes = 10
+        TaskManager.minTargetTasks = 3
+        TaskManager.maxDailyQuota = 5
+        TaskManager.maxConsecutiveMisses = 4
+        TaskManager.overrideWorkingHours = false
     }
 
     @Test
@@ -25,9 +33,10 @@ class TaskManagerTest {
         assertEquals(MonitorState.COLD_SEARCH, TaskManager.currentState)
         assertEquals(0, TaskManager.currentTasksCount)
 
+        // 60s base with 25% jitter = 45s to 75s (45000ms to 75000ms)
         val delay = TaskManager.getNextDelayMs()
-        assertTrue("Cold delay should be >= 60000, got $delay", delay >= 60_000L)
-        assertTrue("Cold delay should be <= 63000, got $delay", delay <= 63_000L)
+        assertTrue("Cold delay should be >= 45000, got $delay", delay >= 45_000L)
+        assertTrue("Cold delay should be <= 75000, got $delay", delay <= 75_000L)
     }
 
     @Test
@@ -41,9 +50,10 @@ class TaskManagerTest {
         assertEquals(1, TaskManager.currentTasksCount)
         assertEquals(0, TaskManager.consecutiveMisses)
 
+        // 5s base with 25% jitter = 3.75s to 6.25s (3750ms to 6250ms)
         val burstDelay = TaskManager.getNextDelayMs()
-        assertTrue("Burst delay should be >= 5000, got $burstDelay", burstDelay >= 5000L)
-        assertTrue("Burst delay should be <= 6500, got $burstDelay", burstDelay <= 6500L)
+        assertTrue("Burst delay should be >= 3700, got $burstDelay", burstDelay >= 3700L)
+        assertTrue("Burst delay should be <= 6300, got $burstDelay", burstDelay <= 6300L)
     }
 
     @Test
@@ -105,31 +115,67 @@ class TaskManagerTest {
     fun testDisappearanceWaitDelays() {
         TaskManager.start()
 
-        // 0 tasks: wait 60s (+ jitter)
+        // 0 tasks: wait 60s (+/- 25% jitter: 45000 to 75000)
         val coldWait = TaskManager.getDisappearanceWaitDelayMs()
-        assertTrue("Cold disappearance wait >= 60000, got $coldWait", coldWait >= 60_000L)
-        assertTrue("Cold disappearance wait <= 63000, got $coldWait", coldWait <= 63_000L)
+        assertTrue("Cold disappearance wait >= 45000, got $coldWait", coldWait >= 45_000L)
+        assertTrue("Cold disappearance wait <= 75000, got $coldWait", coldWait <= 75_000L)
 
-        // 1+ tasks: wait 15s (+ jitter)
+        // 1+ tasks: wait 15s (+/- 25% jitter: 11250 to 18750)
         TaskManager.onButtonClickExecuted(0, 2)
         val burstWait = TaskManager.getDisappearanceWaitDelayMs()
-        assertTrue("Burst disappearance wait >= 15000, got $burstWait", burstWait >= 15_000L)
-        assertTrue("Burst disappearance wait <= 16500, got $burstWait", burstWait <= 16_500L)
+        assertTrue("Burst disappearance wait >= 11000, got $burstWait", burstWait >= 11_000L)
+        assertTrue("Burst disappearance wait <= 19000, got $burstWait", burstWait <= 19_000L)
     }
 
     @Test
-    fun testOffHoursScheduleDormancy() {
-        // Configure schedule to an impossible hour (e.g. 1 to 2 when now is outside)
+    fun testConfigurableTimingAndCustomJitter() {
+        TaskManager.coldIntervalSec = 30
+        TaskManager.burstIntervalSec = 3
+        TaskManager.jitterPercent = 10 // +/- 10%
+
+        TaskManager.start()
+        // Cold: 30s +/- 10% = 27s to 33s
+        val coldDelay = TaskManager.getNextDelayMs()
+        assertTrue("Custom cold delay >= 27000, got $coldDelay", coldDelay >= 27_000L)
+        assertTrue("Custom cold delay <= 33000, got $coldDelay", coldDelay <= 33_000L)
+
+        // Transition to burst
+        TaskManager.onButtonClickExecuted(0, 1)
+        // Burst: 3s +/- 10% = 2.7s to 3.3s
+        val burstDelay = TaskManager.getNextDelayMs()
+        assertTrue("Custom burst delay >= 2700, got $burstDelay", burstDelay >= 2700L)
+        assertTrue("Custom burst delay <= 3300, got $burstDelay", burstDelay <= 3300L)
+    }
+
+    @Test
+    fun testZeroJitterReturnsExactDelay() {
+        TaskManager.coldIntervalSec = 45
+        TaskManager.jitterPercent = 0 // Exactly 0%
+
+        TaskManager.start()
+        val exactDelay = TaskManager.getNextDelayMs()
+        assertEquals(45_000L, exactDelay)
+    }
+
+    @Test
+    fun testOffHoursScheduleDormancyAndKeepAliveDelay() {
+        // Configure schedule to an impossible hour
         val nowHour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         TaskManager.workHourStart = (nowHour + 2) % 24
         TaskManager.workHourEnd = (nowHour + 3) % 24
+        TaskManager.keepAliveIntervalMinutes = 12
+        TaskManager.jitterPercent = 0 // Exact calculation
 
         assertFalse(TaskManager.isWithinSchedule())
 
         TaskManager.start()
         assertEquals(MonitorState.DORMANT_OFF_HOURS, TaskManager.currentState)
 
-        // When override is active, ignores off-hours
+        // In off hours, delay should match keep-alive interval: 12 minutes = 720,000 ms
+        val offHoursDelay = TaskManager.getNextDelayMs()
+        assertEquals(720_000L, offHoursDelay)
+
+        // When override is active, ignores off-hours and goes into cold search
         TaskManager.overrideWorkingHours = true
         assertTrue(TaskManager.isWithinSchedule())
         TaskManager.updateStateBasedOnSchedule()

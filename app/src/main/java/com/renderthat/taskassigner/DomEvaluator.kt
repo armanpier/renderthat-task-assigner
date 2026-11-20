@@ -91,6 +91,36 @@ object DomEvaluator {
             }
             return null;
         }
+
+        function simulateHumanClick(el) {
+            if (!el) return false;
+            try {
+                var rect = el.getBoundingClientRect();
+                var cx = (rect.left || 100) + Math.max(5, (rect.width || 60) * (0.2 + Math.random() * 0.6));
+                var cy = (rect.top || 100) + Math.max(5, (rect.height || 30) * (0.2 + Math.random() * 0.6));
+                var init = {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    clientX: cx,
+                    clientY: cy,
+                    screenX: cx + 20,
+                    screenY: cy + 80,
+                    buttons: 1
+                };
+                try { el.dispatchEvent(new PointerEvent('pointerover', init)); } catch (_) {}
+                try { el.dispatchEvent(new MouseEvent('mouseover', init)); } catch (_) {}
+                try { el.dispatchEvent(new PointerEvent('pointerdown', init)); } catch (_) {}
+                try { el.dispatchEvent(new MouseEvent('mousedown', init)); } catch (_) {}
+                try { el.focus(); } catch (_) {}
+                try { el.dispatchEvent(new PointerEvent('pointerup', init)); } catch (_) {}
+                try { el.dispatchEvent(new MouseEvent('mouseup', init)); } catch (_) {}
+                el.click();
+                return true;
+            } catch (err) {
+                try { el.click(); return true; } catch (_) { return false; }
+            }
+        }
     """
 
     /**
@@ -211,7 +241,6 @@ object DomEvaluator {
                 }
 
                 // 4. Exact Task Count Parser: 'Number of records: X'
-                // Do not use table row count as fallback with Math.max
                 function extractTaskCount() {
                     var bodyText = document.body ? (document.body.innerText || '') : '';
                     var match = bodyText.match(/Number of records:\s*(\d+)/i);
@@ -257,7 +286,8 @@ object DomEvaluator {
     """.trimIndent()
 
     /**
-     * JavaScript action script to click only the specific 'Assign me a Task' button.
+     * JavaScript action script to click only the specific 'Assign me a Task' button
+     * with anti-bot human pointer event simulation.
      */
     val CLICK_SCRIPT: String = """
         (function() {
@@ -266,8 +296,7 @@ object DomEvaluator {
             try {
                 var assignBtn = findAssignButton();
                 if (assignBtn) {
-                    assignBtn.click();
-                    return true;
+                    return simulateHumanClick(assignBtn);
                 }
                 return false;
             } catch (err) {
@@ -275,6 +304,147 @@ object DomEvaluator {
             }
         })();
     """.trimIndent()
+
+    /**
+     * Off-hours Keep-Alive heartbeat script that performs subtle mousemove/scroll events
+     * and light background fetch pings so the portal server never logs out the user due to idle inactivity.
+     */
+    val KEEP_ALIVE_SCRIPT: String = """
+        (function() {
+            $DOM_HELPERS_JS
+
+            try {
+                // 1. Synthetic human-like mouse movement
+                var cx = Math.floor(Math.random() * 400) + 50;
+                var cy = Math.floor(Math.random() * 300) + 50;
+                var evt = new MouseEvent('mousemove', {
+                    view: window,
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: cx,
+                    clientY: cy
+                });
+                document.dispatchEvent(evt);
+                window.dispatchEvent(new Event('scroll'));
+
+                // 2. Head request ping to maintain session
+                try {
+                    fetch(window.location.href, { method: 'HEAD', cache: 'no-store' });
+                } catch (_) {}
+
+                // 3. Check login status
+                var isSimulation = window.location.href.indexOf('simulation.html') !== -1;
+                var isLoggedIn = true;
+                if (!isSimulation) {
+                    var passInputs = queryAllDeep('input[type="password"]');
+                    if (passInputs.length > 0) {
+                        isLoggedIn = false;
+                    }
+                }
+
+                return JSON.stringify({
+                    alive: true,
+                    isLoggedIn: isLoggedIn,
+                    url: window.location.href,
+                    timestamp: Date.now()
+                });
+            } catch (err) {
+                return JSON.stringify({
+                    alive: false,
+                    isLoggedIn: true,
+                    error: String(err)
+                });
+            }
+        })();
+    """.trimIndent()
+
+    /**
+     * Generates a JavaScript script that automatically populates saved portal credentials
+     * into login fields and submits the form so the user doesn't have to re-type them.
+     */
+    fun buildAutoLoginScript(username: String, password: String, autoSubmit: Boolean = true): String {
+        val safeUser = escapeJs(username)
+        val safePass = escapeJs(password)
+        return """
+            (function() {
+                $DOM_HELPERS_JS
+
+                try {
+                    var userVal = "$safeUser";
+                    var passVal = "$safePass";
+                    var shouldSubmit = $autoSubmit;
+
+                    if (!userVal && !passVal) {
+                        return JSON.stringify({ handled: false, reason: 'Empty credentials' });
+                    }
+
+                    // Find username field
+                    var userCandidates = queryAllDeep('input[type="email"], input#username, input[name="username"], input[autocomplete="username"], input[type="text"]');
+                    var userInput = null;
+                    for (var i = 0; i < userCandidates.length; i++) {
+                        var inp = userCandidates[i];
+                        var t = (inp.type || '').toLowerCase();
+                        if (t !== 'hidden' && t !== 'submit' && t !== 'button' && t !== 'checkbox' && t !== 'radio') {
+                            userInput = inp;
+                            break;
+                        }
+                    }
+
+                    // Find password field
+                    var passCandidates = queryAllDeep('input[type="password"]');
+                    var passInput = passCandidates.length > 0 ? passCandidates[0] : null;
+
+                    var filledUser = false;
+                    var filledPass = false;
+
+                    if (userInput && userVal) {
+                        userInput.value = userVal;
+                        userInput.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+                        userInput.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+                        filledUser = true;
+                    }
+
+                    if (passInput && passVal) {
+                        passInput.value = passVal;
+                        passInput.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+                        passInput.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+                        filledPass = true;
+                    }
+
+                    var submitted = false;
+                    if (shouldSubmit && filledUser && filledPass) {
+                        var submitButtons = queryAllDeep('button[type="submit"], input[type="submit"], #Login, .sfdc_button, button');
+                        for (var j = 0; j < submitButtons.length; j++) {
+                            var btn = submitButtons[j];
+                            var txt = (btn.textContent || btn.value || '').trim().toLowerCase();
+                            var btnId = (btn.id || '').toLowerCase();
+                            if (btnId === 'login' || txt.indexOf('log in') !== -1 || txt.indexOf('sign in') !== -1 || btn.type === 'submit') {
+                                simulateHumanClick(btn);
+                                submitted = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    return JSON.stringify({
+                        handled: true,
+                        filledUser: filledUser,
+                        filledPass: filledPass,
+                        submitted: submitted
+                    });
+                } catch (err) {
+                    return JSON.stringify({ handled: false, error: String(err) });
+                }
+            })();
+        """.trimIndent()
+    }
+
+    private fun escapeJs(str: String): String {
+        return str.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+    }
 
     fun parseResult(rawJson: String?): DomInspectionResult {
         if (rawJson.isNullOrBlank() || rawJson == "null") {
@@ -289,7 +459,6 @@ object DomEvaluator {
         }
 
         return try {
-            // Unquote if Android WebView returns a stringified JSON string (e.g. "\"{\\\"isLoggedIn\\\"...}\"")
             var cleaned = rawJson.trim()
             if (cleaned.startsWith("\"") && cleaned.endsWith("\"") && cleaned.length > 2) {
                 cleaned = cleaned.substring(1, cleaned.length - 1)

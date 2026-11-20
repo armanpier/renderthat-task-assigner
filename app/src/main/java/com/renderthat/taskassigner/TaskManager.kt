@@ -27,6 +27,12 @@ object TaskManager {
     var maxDailyQuota: Int = 5
     var maxConsecutiveMisses: Int = 4
 
+    // Configurable Cadence & Anti-Bot Timing Variety
+    var coldIntervalSec: Int = 60
+    var burstIntervalSec: Int = 5
+    var jitterPercent: Int = 25
+    var keepAliveIntervalMinutes: Int = 10
+
     var currentTasksCount: Int = 0
         private set
 
@@ -206,26 +212,44 @@ object TaskManager {
     }
 
     /**
-     * Determines next polling delay in ms based on state machine and jitter rules.
+     * Applies configured random jitter percentage (+/- jitterPercent) to baseMs,
+     * ensuring natural humanized timing variability to defeat anti-bot heuristics.
+     */
+    fun applyJitter(baseMs: Long, percent: Int = jitterPercent): Long {
+        if (percent <= 0) return baseMs
+        val span = (baseMs * (percent / 100.0)).toLong()
+        if (span <= 0) return baseMs
+        val offset = Random.nextLong(-span, span + 1)
+        return (baseMs + offset).coerceAtLeast(1200L)
+    }
+
+    /**
+     * Determines next polling delay in ms based on state machine and configurable jitter rules.
      */
     fun getNextDelayMs(): Long {
         if (!isRunning) return 5000L
-        if (!isWithinSchedule()) return 60_000L
+        if (!isWithinSchedule()) {
+            val keepAliveMs = (keepAliveIntervalMinutes * 60_000L).coerceAtLeast(60_000L)
+            return applyJitter(keepAliveMs)
+        }
 
         return when (currentState) {
             MonitorState.DAILY_MAX_REACHED, MonitorState.BATCH_DEPLETED_STOPPED -> {
-                // Goal met or hard cap reached: check at relaxed 60s interval
-                60_000L
+                // Goal met or hard cap reached: check at relaxed cold interval
+                applyJitter(coldIntervalSec * 1000L)
             }
             MonitorState.BURST_MODE -> {
-                // Burst mode: 5s + jitter (500 - 1500 ms)
-                5000L + Random.nextLong(500, 1501)
+                // Burst / Turbo mode: configurable burst interval + jitter
+                applyJitter(burstIntervalSec * 1000L)
             }
             MonitorState.COLD_SEARCH -> {
-                // Cold search: 60s + jitter (1000 - 3000 ms)
-                60_000L + Random.nextLong(1000, 3001)
+                // Cold search: configurable cold interval + jitter
+                applyJitter(coldIntervalSec * 1000L)
             }
-            MonitorState.DORMANT_OFF_HOURS -> 60_000L
+            MonitorState.DORMANT_OFF_HOURS -> {
+                val keepAliveMs = (keepAliveIntervalMinutes * 60_000L).coerceAtLeast(60_000L)
+                applyJitter(keepAliveMs)
+            }
             MonitorState.SESSION_EXPIRED -> 10_000L
             MonitorState.IDLE -> 5000L
         }
@@ -234,13 +258,10 @@ object TaskManager {
     /**
      * Determines delay when the 'Assign me a Task' button has disappeared from the DOM:
      * - 15s (+ jitter) if current tasks > 0 (waiting for batch assignment to render or next slot)
-     * - 60s (+ jitter) if 0 tasks (standard cold wait)
+     * - Configured coldIntervalSec (+ jitter) if 0 tasks
      */
     fun getDisappearanceWaitDelayMs(): Long {
-        return if (currentTasksCount > 0) {
-            15_000L + Random.nextLong(500, 1501)
-        } else {
-            60_000L + Random.nextLong(1000, 3001)
-        }
+        val baseMs = if (currentTasksCount > 0) 15_000L else (coldIntervalSec * 1000L)
+        return applyJitter(baseMs)
     }
 }

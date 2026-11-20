@@ -11,6 +11,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import androidx.core.app.ServiceCompat
+import org.json.JSONObject
 
 class TaskMonitorService : Service() {
 
@@ -201,12 +202,9 @@ class TaskMonitorService : Service() {
         // 1. Day transition check
         TaskManager.checkAndResetNewDay()
 
-        // 2. Schedule Check
+        // 2. Schedule Check: When outside working hours, perform keep-alive heartbeat ping
         if (!TaskManager.isWithinSchedule()) {
-            releaseWakeLock()
-            TaskManager.updateStateBasedOnSchedule()
-            updateNotification()
-            scheduleNextTick(60_000L)
+            performOffHoursKeepAlive()
             return
         }
 
@@ -243,6 +241,52 @@ class TaskMonitorService : Service() {
         }
     }
 
+    private fun performOffHoursKeepAlive() {
+        releaseWakeLock()
+        TaskManager.updateStateBasedOnSchedule()
+        updateNotification()
+
+        val intervalMin = TaskManager.keepAliveIntervalMinutes
+        LiveLogger.log("KeepAlive", "🌙 Off-hours idle mode. Pinging server to prevent idle timeout...")
+
+        acquireWakeLock()
+        WebViewHolder.evaluateJavascript(DomEvaluator.KEEP_ALIVE_SCRIPT) { rawResult ->
+            try {
+                var cleaned = rawResult.trim()
+                if (cleaned.startsWith("\"") && cleaned.endsWith("\"") && cleaned.length > 2) {
+                    cleaned = cleaned.substring(1, cleaned.length - 1)
+                        .replace("\\\"", "\"")
+                        .replace("\\\\", "\\")
+                }
+                val json = if (cleaned.isNotBlank() && cleaned != "null") JSONObject(cleaned) else null
+                val loggedIn = json?.optBoolean("isLoggedIn", true) ?: true
+
+                if (!loggedIn) {
+                    LiveLogger.log("Auth", "⚠️ Keep-alive detected session logout!")
+                    if (AppPreferences.isAutoLoginEnabled(this) && AppPreferences.hasSavedCredentials(this)) {
+                        LiveLogger.log("Auth", "🔑 Auto-filling login credentials during keep-alive...")
+                        val autoScript = DomEvaluator.buildAutoLoginScript(
+                            AppPreferences.getSavedUsername(this),
+                            AppPreferences.getSavedPassword(this),
+                            autoSubmit = true
+                        )
+                        WebViewHolder.evaluateJavascript(autoScript) { autoRes ->
+                            LiveLogger.log("Auth", "Auto-login response: $autoRes")
+                        }
+                    }
+                } else {
+                    LiveLogger.log("KeepAlive", "💓 Heartbeat OK! Session refreshed. Next keep-alive in ${intervalMin}m.")
+                }
+            } catch (e: Exception) {
+                LiveLogger.log("KeepAlive", "💓 Heartbeat tick completed.")
+            } finally {
+                releaseWakeLock()
+                val nextDelay = TaskManager.getNextDelayMs()
+                scheduleNextTick(nextDelay)
+            }
+        }
+    }
+
     private fun handleInspectionResult(result: DomInspectionResult) {
         if (!TaskManager.isRunning) return
 
@@ -250,18 +294,32 @@ class TaskMonitorService : Service() {
 
         // 1. Session check: Are we logged in?
         if (!result.isLoggedIn) {
-            LiveLogger.log("Auth", "⚠️ Session expired or not logged in.")
-            if (TaskManager.currentState != MonitorState.SESSION_EXPIRED) {
-                TaskManager.onSessionExpired()
-                NotificationHelper.sendAlarmAlert(
-                    this,
-                    "⚠️ Session Expired",
-                    "Please open the app to log in to RenderThat."
+            LiveLogger.log("Auth", "⚠️ Session expired or login screen detected.")
+            if (AppPreferences.isAutoLoginEnabled(this) && AppPreferences.hasSavedCredentials(this)) {
+                LiveLogger.log("Auth", "🔑 Auto-login enabled. Injecting saved credentials...")
+                val autoScript = DomEvaluator.buildAutoLoginScript(
+                    AppPreferences.getSavedUsername(this),
+                    AppPreferences.getSavedPassword(this),
+                    autoSubmit = true
                 )
+                WebViewHolder.evaluateJavascript(autoScript) { autoRes ->
+                    LiveLogger.log("Auth", "Auto-login response: $autoRes")
+                    scheduleNextTick(4000L)
+                }
+                return
+            } else {
+                if (TaskManager.currentState != MonitorState.SESSION_EXPIRED) {
+                    TaskManager.onSessionExpired()
+                    NotificationHelper.sendAlarmAlert(
+                        this,
+                        "⚠️ Session Expired",
+                        "Please open the app to log in to RenderThat."
+                    )
+                }
+                updateNotification()
+                scheduleNextTick(15_000L)
+                return
             }
-            updateNotification()
-            scheduleNextTick(10_000L)
-            return
         } else {
             TaskManager.onSessionRestored()
         }
