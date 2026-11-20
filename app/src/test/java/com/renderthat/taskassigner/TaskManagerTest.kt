@@ -23,7 +23,7 @@ class TaskManagerTest {
         TaskManager.keepAliveIntervalMinutes = 10
         TaskManager.minTargetTasks = 3
         TaskManager.maxDailyQuota = 5
-        TaskManager.maxConsecutiveMisses = 4
+        TaskManager.maxConsecutiveMisses = 100
         TaskManager.overrideWorkingHours = false
     }
 
@@ -57,48 +57,79 @@ class TaskManagerTest {
     }
 
     @Test
-    fun testBatchExhaustionGuardWithGoalReached() {
+    fun testTurboModeTurnsOffAfter100AttemptsWithoutNewTasks() {
         TaskManager.start()
-        // Claim 3 tasks first
-        TaskManager.onButtonClickExecuted(0, 3)
+        // Claim 1 task to enter turbo / burst mode
+        TaskManager.onButtonClickExecuted(0, 1)
         assertEquals(MonitorState.BURST_MODE, TaskManager.currentState)
-        assertEquals(3, TaskManager.currentTasksCount)
+        assertEquals(1, TaskManager.currentTasksCount)
 
-        // 3 consecutive misses
-        for (i in 1..3) {
-            val outcome = TaskManager.onButtonClickExecuted(3, 3)
+        // 99 consecutive misses
+        for (i in 1..99) {
+            val outcome = TaskManager.onButtonClickExecuted(1, 1)
             assertEquals(ClickOutcome.MISS_CONTINUE_BURST, outcome)
             assertEquals(i, TaskManager.consecutiveMisses)
             assertEquals(MonitorState.BURST_MODE, TaskManager.currentState)
         }
 
-        // 4th miss triggers Batch Exhaustion Guard -> BATCH_DEPLETED_STOPPED
-        val finalOutcome = TaskManager.onButtonClickExecuted(3, 3)
+        // 100th miss triggers turning off pushing until button appears again
+        val finalOutcome = TaskManager.onButtonClickExecuted(1, 1)
         assertEquals(ClickOutcome.MISS_BATCH_DEPLETED_STOPPED, finalOutcome)
         assertEquals(MonitorState.BATCH_DEPLETED_STOPPED, TaskManager.currentState)
-        assertEquals(4, TaskManager.consecutiveMisses)
+        assertEquals(100, TaskManager.consecutiveMisses)
+        assertTrue(TaskManager.waitingForButtonReappearance)
     }
 
     @Test
-    fun testBatchExhaustionGuardWithUnderThreeTasksFallsBackToColdSearch() {
+    fun testButtonReappearanceResumesTurboMode() {
         TaskManager.start()
-        // Claim only 2 tasks
+        TaskManager.maxConsecutiveMisses = 5 // Small threshold for testing
         TaskManager.onButtonClickExecuted(0, 2)
         assertEquals(MonitorState.BURST_MODE, TaskManager.currentState)
-        assertEquals(2, TaskManager.currentTasksCount)
 
-        // 3 consecutive misses
-        for (i in 1..3) {
-            val outcome = TaskManager.onButtonClickExecuted(2, 2)
-            assertEquals(ClickOutcome.MISS_CONTINUE_BURST, outcome)
-            assertEquals(i, TaskManager.consecutiveMisses)
+        // Exhaust 5 misses
+        for (i in 1..5) {
+            TaskManager.onButtonClickExecuted(2, 2)
         }
+        assertEquals(MonitorState.BATCH_DEPLETED_STOPPED, TaskManager.currentState)
+        assertTrue(TaskManager.waitingForButtonReappearance)
 
-        // 4th miss triggers fallback to COLD_SEARCH because tasks < 3
-        val finalOutcome = TaskManager.onButtonClickExecuted(2, 2)
-        assertEquals(ClickOutcome.MISS_FELL_BACK_TO_COLD, finalOutcome)
-        assertEquals(MonitorState.COLD_SEARCH, TaskManager.currentState)
-        assertEquals(0, TaskManager.consecutiveMisses) // Resets for cold search
+        // 1. In inspection: button is still visible -> standby continues
+        val res1 = TaskManager.checkButtonReappearance(buttonAvailable = true, newCount = 2)
+        assertFalse(res1)
+        assertEquals(MonitorState.BATCH_DEPLETED_STOPPED, TaskManager.currentState)
+
+        // 2. In inspection: button disappears -> recorded that it was hidden
+        val res2 = TaskManager.checkButtonReappearance(buttonAvailable = false, newCount = 2)
+        assertFalse(res2)
+        assertTrue(TaskManager.buttonWasHiddenInStandby)
+        assertEquals(MonitorState.BATCH_DEPLETED_STOPPED, TaskManager.currentState)
+
+        // 3. In inspection: button appears AGAIN! -> triggers resume
+        val res3 = TaskManager.checkButtonReappearance(buttonAvailable = true, newCount = 2)
+        assertTrue(res3)
+        assertEquals(MonitorState.BURST_MODE, TaskManager.currentState)
+        assertEquals(0, TaskManager.consecutiveMisses)
+        assertFalse(TaskManager.waitingForButtonReappearance)
+    }
+
+    @Test
+    fun testNewTasksInStandbyResumesTurboMode() {
+        TaskManager.start()
+        TaskManager.maxConsecutiveMisses = 3
+        TaskManager.onButtonClickExecuted(0, 1)
+
+        for (i in 1..3) {
+            TaskManager.onButtonClickExecuted(1, 1)
+        }
+        assertEquals(MonitorState.BATCH_DEPLETED_STOPPED, TaskManager.currentState)
+
+        // External new task drop in table (1 -> 3 tasks)
+        val res = TaskManager.checkButtonReappearance(buttonAvailable = true, newCount = 3)
+        assertTrue(res)
+        assertEquals(3, TaskManager.currentTasksCount)
+        assertEquals(MonitorState.BURST_MODE, TaskManager.currentState)
+        assertEquals(0, TaskManager.consecutiveMisses)
     }
 
     @Test

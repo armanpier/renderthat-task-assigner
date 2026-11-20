@@ -54,7 +54,7 @@ object AppPreferences {
     const val DEFAULT_BURST_INTERVAL_SEC = 5
     const val DEFAULT_JITTER_PERCENT = 25
     const val DEFAULT_KEEP_ALIVE_MINUTES = 10
-    const val DEFAULT_MAX_CONSECUTIVE_MISSES = 4
+    const val DEFAULT_MAX_CONSECUTIVE_MISSES = 100
 
     val DEFAULT_WORK_DAYS: Set<Int> = setOf(
         Calendar.MONDAY,
@@ -93,11 +93,11 @@ object AppPreferences {
     }
 
     fun getMaxConsecutiveMisses(context: Context): Int {
-        return getPrefs(context).getInt(KEY_MAX_CONSECUTIVE_MISSES, DEFAULT_MAX_CONSECUTIVE_MISSES).coerceIn(1, 10)
+        return getPrefs(context).getInt(KEY_MAX_CONSECUTIVE_MISSES, DEFAULT_MAX_CONSECUTIVE_MISSES).coerceIn(1, 1000)
     }
 
     fun setMaxConsecutiveMisses(context: Context, misses: Int) {
-        val clamped = misses.coerceIn(1, 10)
+        val clamped = misses.coerceIn(1, 1000)
         getPrefs(context).edit().putInt(KEY_MAX_CONSECUTIVE_MISSES, clamped).apply()
         TaskManager.maxConsecutiveMisses = clamped
     }

@@ -220,15 +220,7 @@ class TaskMonitorService : Service() {
             return
         }
 
-        // 4. Batch Exhaustion Guard: If goal met and batch depleted, stop clicking
-        if (TaskManager.currentState == MonitorState.BATCH_DEPLETED_STOPPED) {
-            LiveLogger.log("Monitor", "Batch completed (>= 3 tasks). Waiting for manual restart or new batch.")
-            updateNotification()
-            scheduleNextTick(60_000L)
-            return
-        }
-
-        // 5. Execute DOM inspection
+        // 4. Execute DOM inspection (inspects page state to detect tasks, button presence, or button reappearance)
         LiveLogger.log("DOM", "Inspecting page state...")
         WebViewHolder.evaluateJavascript(DomEvaluator.INSPECTION_SCRIPT) { rawResult ->
             try {
@@ -367,10 +359,31 @@ class TaskMonitorService : Service() {
             scheduleNextTick(60_000L)
             return
         }
+        // 4. Standby Guard (when 100 misses reached in turbo mode): Wait for button to reappear
         if (TaskManager.currentState == MonitorState.BATCH_DEPLETED_STOPPED) {
-            updateNotification()
-            scheduleNextTick(60_000L)
-            return
+            val resumed = TaskManager.checkButtonReappearance(result.buttonAvailable, result.taskCount)
+            if (resumed) {
+                LiveLogger.log("Turbo", "🔔 'Assign me a Task' button has appeared again! Turning auto-assign back ON.")
+                NotificationHelper.sendAlarmAlert(
+                    this,
+                    "🔔 Button Reappeared!",
+                    "Task assign button is available again. Resuming auto-assign!"
+                )
+                updateNotification()
+                scheduleNextTick(1000L)
+                return
+            } else {
+                val statusMsg = if (TaskManager.buttonWasHiddenInStandby) {
+                    "Button disappeared. Waiting for it to reappear..."
+                } else {
+                    "100 attempts reached without new tasks. Waiting for button cycle before resuming."
+                }
+                LiveLogger.log("Turbo", "⏸️ Standby: $statusMsg (Button visible: ${result.buttonAvailable})")
+                updateNotification()
+                val nextDelay = TaskManager.getNextDelayMs()
+                scheduleNextTick(nextDelay)
+                return
+            }
         }
 
         // 5. Button Presence / Disappearance Handling
@@ -414,18 +427,18 @@ class TaskMonitorService : Service() {
                             )
                         }
                         ClickOutcome.MISS_BATCH_DEPLETED_STOPPED -> {
-                            LiveLogger.log("Tasks", "🎯 4 consecutive misses and >= 3 tasks. Batch finished. Stopped!")
+                            LiveLogger.log("Turbo", "⏸️ Reached ${TaskManager.maxConsecutiveMisses} attempts in turbo mode without new tasks. Turning OFF until button reappears.")
                             NotificationHelper.sendAlarmAlert(
                                 this,
-                                "🎯 Task Goal Secured!",
-                                "Batch is finished. You have ${TaskManager.currentTasksCount} tasks assigned!"
+                                "⏸️ Turbo Attempts Limit Reached",
+                                "Reached ${TaskManager.maxConsecutiveMisses} attempts in turbo mode. Pushing turned off until button reappears."
                             )
                         }
                         ClickOutcome.MISS_CONTINUE_BURST -> {
-                            LiveLogger.log("Tasks", "Miss in burst mode (misses: ${TaskManager.consecutiveMisses}/${TaskManager.maxConsecutiveMisses}). Continuing burst...")
+                            LiveLogger.log("Turbo", "Miss in turbo mode (${TaskManager.consecutiveMisses}/${TaskManager.maxConsecutiveMisses}). Continuing burst...")
                         }
                         ClickOutcome.MISS_FELL_BACK_TO_COLD -> {
-                            LiveLogger.log("Tasks", "Miss limit reached with < 3 tasks. Returning to 60s cold search...")
+                            LiveLogger.log("Tasks", "Cold search tick finished. Returning to cold cadence...")
                         }
                     }
 
@@ -438,6 +451,10 @@ class TaskMonitorService : Service() {
     }
 
     private fun performManualClick() {
+        if (TaskManager.currentState == MonitorState.BATCH_DEPLETED_STOPPED) {
+            TaskManager.resetStandby()
+            TaskManager.updateStateBasedOnSchedule()
+        }
         val countBefore = TaskManager.currentTasksCount
         LiveLogger.log("ManualAction", "Executing direct click on 'Assign me a Task'...")
         WebViewHolder.evaluateJavascript(DomEvaluator.CLICK_SCRIPT) {

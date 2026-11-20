@@ -179,15 +179,15 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:layout_marginStart="8dp"
-                android:hint="Miss Limit"
-                app:helperText="Batch stop (4)">
+                android:hint="Turbo Tries"
+                app:helperText="Turn off limit (100)">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/et_misses_limit"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="number"
-                    android:text="4"
+                    android:text="100"
                     android:textColor="@color/on_surface" />
             </com.google.android.material.textfield.TextInputLayout>
         </LinearLayout>

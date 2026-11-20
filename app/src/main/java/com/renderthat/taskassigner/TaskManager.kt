@@ -25,7 +25,13 @@ object TaskManager {
 
     var minTargetTasks: Int = 3
     var maxDailyQuota: Int = 5
-    var maxConsecutiveMisses: Int = 4
+    var maxConsecutiveMisses: Int = 100
+
+    var waitingForButtonReappearance: Boolean = false
+        private set
+
+    var buttonWasHiddenInStandby: Boolean = false
+        private set
 
     // Configurable Cadence & Anti-Bot Timing Variety
     var coldIntervalSec: Int = 60
@@ -65,19 +71,20 @@ object TaskManager {
 
     fun start() {
         isRunning = true
-        consecutiveMisses = 0
+        resetStandby()
         checkAndResetNewDay()
         updateStateBasedOnSchedule()
     }
 
     fun pause() {
         isRunning = false
+        resetStandby()
         currentState = MonitorState.IDLE
     }
 
     fun resetDailyStats() {
         currentTasksCount = 0
-        consecutiveMisses = 0
+        resetStandby()
         totalClicksToday = 0
         if (isRunning) {
             updateStateBasedOnSchedule()
@@ -120,7 +127,8 @@ object TaskManager {
             LiveLogger.log("TaskManager", "State -> DAILY_MAX_REACHED ($currentTasksCount/$maxDailyQuota tasks)")
             return
         }
-        if (currentState == MonitorState.BATCH_DEPLETED_STOPPED) {
+        if (waitingForButtonReappearance) {
+            currentState = MonitorState.BATCH_DEPLETED_STOPPED
             return
         }
         if (currentState == MonitorState.SESSION_EXPIRED) {
@@ -191,16 +199,10 @@ object TaskManager {
             if (currentState == MonitorState.BURST_MODE) {
                 consecutiveMisses++
                 if (consecutiveMisses >= maxConsecutiveMisses) {
-                    return if (currentTasksCount >= minTargetTasks) {
-                        // Batch Exhaustion Guard: 4 misses and >= 3 tasks -> goal met!
-                        currentState = MonitorState.BATCH_DEPLETED_STOPPED
-                        ClickOutcome.MISS_BATCH_DEPLETED_STOPPED
-                    } else {
-                        // Batch Exhaustion Guard: 4 misses and < 3 tasks -> fallback to 60s cold search
-                        consecutiveMisses = 0
-                        currentState = MonitorState.COLD_SEARCH
-                        ClickOutcome.MISS_FELL_BACK_TO_COLD
-                    }
+                    waitingForButtonReappearance = true
+                    buttonWasHiddenInStandby = false
+                    currentState = MonitorState.BATCH_DEPLETED_STOPPED
+                    return ClickOutcome.MISS_BATCH_DEPLETED_STOPPED
                 }
                 return ClickOutcome.MISS_CONTINUE_BURST
             } else {
@@ -208,6 +210,48 @@ object TaskManager {
                 consecutiveMisses = 0
                 return ClickOutcome.MISS_FELL_BACK_TO_COLD
             }
+        }
+    }
+
+    /**
+     * Checks if the button has disappeared and then reappeared, or if new tasks were assigned,
+     * while in standby mode after reaching max consecutive misses in turbo mode.
+     * Returns true if auto-assign should resume.
+     */
+    fun checkButtonReappearance(buttonAvailable: Boolean, newCount: Int): Boolean {
+        if (!waitingForButtonReappearance && currentState != MonitorState.BATCH_DEPLETED_STOPPED) {
+            return false
+        }
+
+        // If new tasks appeared in the table, resume immediately
+        if (newCount > currentTasksCount) {
+            currentTasksCount = newCount
+            resetStandby()
+            updateStateBasedOnSchedule()
+            return true
+        }
+
+        if (!buttonAvailable) {
+            // Button is not currently available/visible -> mark that it was hidden
+            buttonWasHiddenInStandby = true
+            return false
+        } else {
+            // Button is available. If it was previously hidden during standby, it has now REAPPEARED!
+            if (buttonWasHiddenInStandby) {
+                resetStandby()
+                updateStateBasedOnSchedule()
+                return true
+            }
+            return false
+        }
+    }
+
+    fun resetStandby() {
+        consecutiveMisses = 0
+        waitingForButtonReappearance = false
+        buttonWasHiddenInStandby = false
+        if (currentState == MonitorState.BATCH_DEPLETED_STOPPED) {
+            currentState = if (currentTasksCount > 0) MonitorState.BURST_MODE else MonitorState.COLD_SEARCH
         }
     }
 
